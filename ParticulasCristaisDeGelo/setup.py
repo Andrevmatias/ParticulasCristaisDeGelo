@@ -5,6 +5,7 @@ setup(name='trainer',
       packages=find_packages(),
       install_requires=[
           'keras',
-          'h5py'
+          'h5py',
+          'sklearn'
       ],
 zip_safe=False)

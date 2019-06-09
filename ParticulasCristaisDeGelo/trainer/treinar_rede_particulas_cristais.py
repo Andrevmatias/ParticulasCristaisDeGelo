@@ -1,13 +1,18 @@
+import os
+
 import keras as keras
 from keras.models import Model
 from keras.layers import Input, Dense, Activation,Flatten, Conv2D
 from keras.layers import Dropout, MaxPooling2D
 from keras import callbacks
 
+from sklearn.model_selection import train_test_split
+
 import tensorflow as tf
 
 from tensorflow.python.lib.io import file_io
 
+import h5py
 import numpy as np
 
 import argparse
@@ -15,53 +20,52 @@ import argparse
 ## A adaptação para rodar no Google Cloud é baseada em 
 # https://medium.com/@natu.neeraj/training-a-keras-model-on-google-cloud-ml-cb831341c196
 
-##Carrega os dados a serem usados para treinamento
+## Retorna todos os arquivos h5 de um diretório
+def get_all_h5_files():
+  files = []
+
+  for r, _, f in os.walk("data"):
+      for file in f:
+          if '.h5' in file:
+              files.append(os.path.join(r, file))
+
+  return files
+
+## Carrega os dados de um arquivo h5 em formato compatível com a rede
+def get_data(h5):
+  features = []
+  target = h5['size'].value
+
+  #TODO: Carregar features para rodar a rede
+
+  return [features, target]
+
+## Carrega os dados a serem usados para treinamento
 def load_dataset():
-    return tf.contrib.learn.datasets.load_dataset("mnist")
+    h5_files = get_all_h5_files()
+
+    raw_data = map(lambda f: h5py.File(f, 'r') , h5_files)
+    features = []
+    targets = []
+
+    for h5 in raw_data:
+      ftr, tgt = get_data(h5)
+      features.append(ftr)
+      targets.append(tgt)
+
+    return [features, targets]
 
 ##Cria o modelo da rede a partir do formato do input
 def create_model(input_shape):
     X_input = Input(input_shape)
 
-    ##Convolutional Layer 1
-    X = Conv2D(
-    filters=32,
-    kernel_size=(5, 5),
-    strides=(1, 1),
-    padding='same',
-    name = 'conv1'
-    )(X_input)
-    X = Activation('relu')(X)
-
-    ##Max pooling layer 1
-    X = MaxPooling2D(pool_size=(2, 2), strides =2, name = 'maxpool1')(X)
-
-    ##Convolutional Layer 2
-    X = Conv2D(
-    filters=64,
-    kernel_size=[5,5],
-    padding='same',
-    name = 'conv2'
-    )(X)
-    X = Activation('relu')(X)
-
-    ##Max Pooling Layer 2
-    X = MaxPooling2D(pool_size=(2, 2), strides =2, name = 'maxpool2')(X)
-
-    ##Flatten
-    X = Flatten()(X)
+    #TODO: Criar o modelo
 
     ##Dense Layer
-    X = Dense(1024, activation='relu', name='dense_1')(X)
-
-    ##Dropout layer
-    X = Dropout(0.4, name = 'dropout')(X)
-
-    ##dense 2 layer
-    X = Dense(10, activation='softmax', name ='dense_2')(X)
+    X = Dense(1024, activation='relu', name='dense_1')(X_input)
 
     ##The model object
-    model = Model(inputs = X_input, outputs = X, name='cnnMINSTModel')
+    model = Model(inputs = X_input, outputs = X, name='particulasModel')
 
     return model
 
@@ -78,33 +82,32 @@ def main(job_dir,**args):
     with tf.device('/device:GPU:0'):
 
         ##Carrega dados
-        dados_particulas = load_dataset()
+        features, targets = load_dataset()
 
-        train_data = dados_particulas.train.images
-        train_labels = np.asarray(dados_particulas.train.labels, dtype=np.int32)
-        eval_data = dados_particulas.test.images
-        eval_labels = np.asarray(dados_particulas.test.labels, dtype=np.int32)
-
-        ##Pré-processamento
-        train_labels = keras.utils.np_utils.to_categorical(train_labels, 10)
-        eval_labels = keras.utils.np_utils.to_categorical(eval_labels, 10)
-        train_data = np.reshape(train_data, [-1, 28, 28, 1])
-        eval_data = np.reshape(eval_data, [-1,28,28,1])
+        features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
 
         ## Gera o modelo
-        model = create_model(train_data.shape[1:])
+        model = create_model(features_train)
 
         ## Compila o modelo
-        model.compile(optimizer = "Adam" , loss = "binary_crossentropy", metrics = ["accuracy"])
+        model.compile(optimizer = "Adam" , loss = "binary_crossentropy", metrics = ["accuracy"], )
 
         ## Gera o log de execução da rede para o Tensorboard
         tensorboard = callbacks.TensorBoard(log_dir=logs_path, histogram_freq=0, write_graph=True, write_images=True)
 
         ## Treina o modelo
-        model.fit(x = train_data, y = train_labels, epochs = 4,verbose = 1, batch_size=100, callbacks=[tensorboard], validation_data=(eval_data,eval_labels) )
+        model.fit(x = features_train, 
+                  y = targets_train, 
+                  epochs = 4,
+                  verbose = 1, 
+                  batch_size = 100, 
+                  callbacks = [tensorboard], 
+                  validation_split = .1)
 
         ## Salva o modelo
         save_model(job_dir, model)
+
+        model.test_on_batch(features_test, targets_test)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
