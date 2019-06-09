@@ -68,11 +68,11 @@ def create_model(input_shape):
 def save_model(job_dir, model):
   model.save('model.h5')
   with file_io.FileIO('model.h5', mode='r') as input_f:
-    with file_io.FileIO(job_dir + '/model.h5', mode='w+') as output_f:
+    with file_io.FileIO(job_dir + 'model.h5', mode='w+') as output_f:
       output_f.write(input_f.read())
 
 def main(job_dir,**args):
-    logs_path = job_dir + '/logs/'
+    logs_path = job_dir + 'logs/'
 
     ##Usar GPU
     with tf.device('/device:GPU:0'):
