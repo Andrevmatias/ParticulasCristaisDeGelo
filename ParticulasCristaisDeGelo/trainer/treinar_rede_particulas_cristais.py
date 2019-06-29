@@ -14,6 +14,7 @@ from tensorflow.python.lib.io import file_io
 
 import h5py
 import numpy as np
+from numpy import genfromtxt
 
 import argparse
 
@@ -55,6 +56,15 @@ def load_dataset():
 
     return [features, targets]
 
+## Carrega os dados a serem usados para treinamento
+def load_dataset_csv():
+    dataset = genfromtxt("data/DadosIntensidade_3.csv", delimiter=",")
+
+    features = dataset[:,0:-1]
+    targets = dataset[:,-1]
+
+    return [features, targets]
+
 ##Cria o modelo da rede a partir do formato do input
 def create_model(input_shape):
     X_input = Input(input_shape)
@@ -82,12 +92,12 @@ def main(job_dir,**args):
     with tf.device('/device:GPU:0'):
 
         ##Carrega dados
-        features, targets = load_dataset()
+        features, targets = load_dataset_csv()
 
         features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
 
         ## Gera o modelo
-        model = create_model(features_train)
+        model = create_model(features_train.shape)
 
         ## Compila o modelo
         model.compile(optimizer = "Adam" , loss = "binary_crossentropy", metrics = ["accuracy"], )
