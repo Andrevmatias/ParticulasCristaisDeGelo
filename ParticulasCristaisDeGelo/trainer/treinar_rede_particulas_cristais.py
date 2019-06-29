@@ -7,6 +7,7 @@ from keras.layers import Dropout, MaxPooling2D
 from keras import callbacks
 
 from sklearn.model_selection import train_test_split
+from sklearn.svm import LinearSVR
 
 import tensorflow as tf
 
@@ -73,6 +74,7 @@ def create_model(input_shape):
 
     ##Dense Layer
     X = Dense(1024, activation='relu', name='dense_1')(X_input)
+    X = Dense(1, activation="linear", name='output')(X)
 
     ##The model object
     model = Model(inputs = X_input, outputs = X, name='particulasModel')
@@ -97,10 +99,10 @@ def main(job_dir,**args):
         features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
 
         ## Gera o modelo
-        model = create_model(features_train.shape)
+        model = create_model((features_train.shape[1],))
 
         ## Compila o modelo
-        model.compile(optimizer = "Adam" , loss = "binary_crossentropy", metrics = ["accuracy"], )
+        model.compile(optimizer = "Adam" , loss = "mean_absolute_percentage_error", metrics = ["accuracy"], )
 
         ## Gera o log de execução da rede para o Tensorboard
         tensorboard = callbacks.TensorBoard(log_dir=logs_path, histogram_freq=0, write_graph=True, write_images=True)
