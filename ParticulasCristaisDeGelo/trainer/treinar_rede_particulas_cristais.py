@@ -1,5 +1,8 @@
 import os
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 import keras as keras
 from keras.models import Model
 from keras.layers import Input, Dense, Activation,Flatten, Conv2D
@@ -18,7 +21,6 @@ import tensorflow as tf
 from tensorflow.python.lib.io import file_io
 
 import h5py
-import numpy as np
 from numpy import genfromtxt
 
 import argparse
@@ -86,11 +88,21 @@ def create_model(input_shape):
 
     return model
 
+
 def save_model(job_dir, model):
   model.save('model.h5')
   with file_io.FileIO('model.h5', mode='r') as input_f:
     with file_io.FileIO(job_dir + 'model.h5', mode='w+') as output_f:
       output_f.write(input_f.read())
+
+
+def plot_scatter(target, predict, job_dir):
+  plt.scatter(target, predict, c='red')
+  plt.xlabel('Real Size')
+  plt.ylabel('Predicted Size')
+  plt.savefig('scatter.png', format='png')
+  plt.show()
+
 
 def main(job_dir,**args):
     logs_path = job_dir + '/logs/'
@@ -125,6 +137,9 @@ def main(job_dir,**args):
         # save_model(job_dir, model)
 
         model.test_on_batch(features_test, targets_test)
+
+        model.pre
+
 
 def r2_keras(y_true, y_pred):
     SS_res =  K.sum(K.square(y_true - y_pred)) 
