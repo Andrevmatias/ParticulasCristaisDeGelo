@@ -5,9 +5,13 @@ from keras.models import Model
 from keras.layers import Input, Dense, Activation,Flatten, Conv2D
 from keras.layers import Dropout, MaxPooling2D
 from keras import callbacks
+from keras import backend as K
 
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVR
+from sklearn.preprocessing import FunctionTransformer
+
+import pandas as pd
 
 import tensorflow as tf
 
@@ -58,8 +62,11 @@ def load_dataset():
     return [features, targets]
 
 ## Carrega os dados a serem usados para treinamento
-def load_dataset_csv():
-    dataset = genfromtxt("data/DadosIntensidade_3.csv", delimiter=",")
+def load_dataset_csv(job_dir):
+  with file_io.FileIO(job_dir + '/data/DadosIntensidade.csv', 'r') as f:
+    dataset = pd.read_csv(f, header=None, nrows=14896).values
+    #transformer = FunctionTransformer(np.log1p, validate=True)
+    #transformer.transform(dataset)
 
     features = dataset[:,0:-1]
     targets = dataset[:,-1]
@@ -70,11 +77,9 @@ def load_dataset_csv():
 def create_model(input_shape):
     X_input = Input(input_shape)
 
-    #TODO: Criar o modelo
-
     ##Dense Layer
     X = Dense(1024, activation='relu', name='dense_1')(X_input)
-    X = Dense(1, activation="linear", name='output')(X)
+    X = Dense(1, activation='linear', name='output')(X)
 
     ##The model object
     model = Model(inputs = X_input, outputs = X, name='particulasModel')
@@ -88,13 +93,13 @@ def save_model(job_dir, model):
       output_f.write(input_f.read())
 
 def main(job_dir,**args):
-    logs_path = job_dir + 'logs/'
+    logs_path = job_dir + '/logs/'
 
     ##Usar GPU
     with tf.device('/device:GPU:0'):
 
         ##Carrega dados
-        features, targets = load_dataset_csv()
+        features, targets = load_dataset_csv(job_dir)
 
         features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
 
@@ -102,7 +107,7 @@ def main(job_dir,**args):
         model = create_model((features_train.shape[1],))
 
         ## Compila o modelo
-        model.compile(optimizer = "Adam" , loss = "mean_absolute_percentage_error", metrics = ["accuracy"], )
+        model.compile(optimizer = "adam" , loss = "mean_squared_error", metrics = ["mean_squared_error", r2_keras], )
 
         ## Gera o log de execução da rede para o Tensorboard
         tensorboard = callbacks.TensorBoard(log_dir=logs_path, histogram_freq=0, write_graph=True, write_images=True)
@@ -110,16 +115,21 @@ def main(job_dir,**args):
         ## Treina o modelo
         model.fit(x = features_train, 
                   y = targets_train, 
-                  epochs = 4,
+                  epochs = 250,
                   verbose = 1, 
                   batch_size = 100, 
                   callbacks = [tensorboard], 
                   validation_split = .1)
 
         ## Salva o modelo
-        save_model(job_dir, model)
+        # save_model(job_dir, model)
 
         model.test_on_batch(features_test, targets_test)
+
+def r2_keras(y_true, y_pred):
+    SS_res =  K.sum(K.square(y_true - y_pred)) 
+    SS_tot = K.sum(K.square(y_true - K.mean(y_true))) 
+    return ( 1 - SS_res/(SS_tot + K.epsilon()) )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
