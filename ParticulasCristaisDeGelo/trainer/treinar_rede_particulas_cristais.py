@@ -8,7 +8,7 @@ from keras import callbacks
 from keras import backend as K
 
 from sklearn.model_selection import train_test_split
-from sklearn.svm import LinearSVR
+from sklearn.svm import SVR
 from sklearn.preprocessing import FunctionTransformer
 
 import pandas as pd
@@ -64,7 +64,7 @@ def load_dataset():
 ## Carrega os dados a serem usados para treinamento
 def load_dataset_csv(job_dir):
   with file_io.FileIO(job_dir + '/data/DadosIntensidade.csv', 'r') as f:
-    dataset = pd.read_csv(f, header=None, nrows=14896).values
+    dataset = pd.read_csv(f, header=None).values
     #transformer = FunctionTransformer(np.log1p, validate=True)
     #transformer.transform(dataset)
 
@@ -92,39 +92,49 @@ def save_model(job_dir, model):
     with file_io.FileIO(job_dir + 'model.h5', mode='w+') as output_f:
       output_f.write(input_f.read())
 
+def run_nn(features_train, features_test, targets_train, targets_test, logs_path):
+  ## Gera o modelo
+  model = create_model((features_train.shape[1],))
+
+  ## Compila o modelo
+  model.compile(optimizer = "adam" , loss = "mean_squared_error", metrics = ["mean_squared_error", r2_keras], )
+
+  ## Gera o log de execução da rede para o Tensorboard
+  tensorboard = callbacks.TensorBoard(log_dir=logs_path, histogram_freq=0, write_graph=True, write_images=True)
+
+  ## Treina o modelo
+  model.fit(x = features_train, 
+            y = targets_train, 
+            epochs = 250,
+            verbose = 1, 
+            batch_size = 100, 
+            callbacks = [tensorboard], 
+            validation_split = .1)
+
+  ## Salva o modelo
+  # save_model(job_dir, model)
+
+  model.test_on_batch(features_test, targets_test)
+
+def run_svm(features_train, features_test, targets_train, targets_test, logs_path):
+  regr = SVR(C=1000.0, coef0=0.001, degree=3, epsilon=0.1, gamma=0.1,
+    kernel='rbf', shrinking=True, tol=0.001, verbose=True)
+  regr.fit(features_train, targets_train)
+  r2 = regr.score(features_test, targets_test)
+  print(f'R2 = {r2}')
+
 def main(job_dir,**args):
     logs_path = job_dir + '/logs/'
 
     ##Usar GPU
     with tf.device('/device:GPU:0'):
+      ##Carrega dados
+      features, targets = load_dataset_csv(job_dir)
 
-        ##Carrega dados
-        features, targets = load_dataset_csv(job_dir)
+      features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
 
-        features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
-
-        ## Gera o modelo
-        model = create_model((features_train.shape[1],))
-
-        ## Compila o modelo
-        model.compile(optimizer = "adam" , loss = "mean_squared_error", metrics = ["mean_squared_error", r2_keras], )
-
-        ## Gera o log de execução da rede para o Tensorboard
-        tensorboard = callbacks.TensorBoard(log_dir=logs_path, histogram_freq=0, write_graph=True, write_images=True)
-
-        ## Treina o modelo
-        model.fit(x = features_train, 
-                  y = targets_train, 
-                  epochs = 250,
-                  verbose = 1, 
-                  batch_size = 100, 
-                  callbacks = [tensorboard], 
-                  validation_split = .1)
-
-        ## Salva o modelo
-        # save_model(job_dir, model)
-
-        model.test_on_batch(features_test, targets_test)
+      #run_nn(features_train, features_test, targets_train, targets_test, logs_path)
+      run_svm(features_train, features_test, targets_train, targets_test, logs_path)
 
 def r2_keras(y_true, y_pred):
     SS_res =  K.sum(K.square(y_true - y_pred)) 
