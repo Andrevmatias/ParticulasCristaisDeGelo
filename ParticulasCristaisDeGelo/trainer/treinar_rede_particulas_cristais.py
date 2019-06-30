@@ -1,11 +1,16 @@
 import os
 
+import matplotlib
+matplotlib.use("agg") 
+import matplotlib.pyplot as plt
+
 import keras as keras
 from keras.models import Model
 from keras.layers import Input, Dense, Activation,Flatten, Conv2D
 from keras.layers import Dropout, MaxPooling2D
 from keras import callbacks
 from keras import backend as K
+from keras.models import load_model
 
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVR
@@ -92,7 +97,10 @@ def save_model(job_dir, model):
     with file_io.FileIO(job_dir + 'model.h5', mode='w+') as output_f:
       output_f.write(input_f.read())
 
-def run_nn(features_train, features_test, targets_train, targets_test, logs_path):
+#Roda uma NN com uma camada escondida de 1024 neurônios
+def run_nn(features_train, features_test, targets_train, targets_test, job_dir):
+  logs_path = job_dir + '/logs/'
+
   ## Gera o modelo
   model = create_model((features_train.shape[1],))
 
@@ -112,19 +120,52 @@ def run_nn(features_train, features_test, targets_train, targets_test, logs_path
             validation_split = .1)
 
   ## Salva o modelo
-  # save_model(job_dir, model)
+  save_model(job_dir, model)
 
-  model.test_on_batch(features_test, targets_test)
+  #model.test_on_batch(features_test, targets_test)
 
-def run_svm(features_train, features_test, targets_train, targets_test, logs_path):
+  predicted = model.predict(features_test)
+
+  plot_scatter(targets_test, predicted, job_dir)
+
+  scores = model.evaluate(features_test, targets_test, verbose=True)
+
+  print(model.metrics_names)
+  print(scores)
+
+#Roda uma SVN conforme os parâmetros descritos no artigo
+def run_svm(features_train, features_test, targets_train, targets_test, job_dir):
   regr = SVR(C=1000.0, coef0=0.001, degree=3, epsilon=0.1, gamma=0.1,
     kernel='rbf', shrinking=True, tol=0.001, verbose=True)
   regr.fit(features_train, targets_train)
   r2 = regr.score(features_test, targets_test)
-  print(f'R2 = {r2}')
+  print('R2: {0}'.format(r2))
+
+  predict = regr.predict(features_test)
+  plot_scatter(targets_test, predict, job_dir)
+
+#Plota real x predito
+def plot_scatter(target, predict, job_dir):
+  plt.scatter(target, predict, c='red')
+  plt.xlabel('Real Size')
+  plt.ylabel('Predicted Size')
+
+  with file_io.FileIO(job_dir + '/scatter.png', mode='w+') as output_f:
+    plt.savefig(output_f, format='png')
+
+  #plt.show()
+
+def test_best_nn(test_features, test_targets, job_dir):
+  with file_io.FileIO(job_dir + 'model.h5', mode='r') as input_f:
+    model = load_model(input_f)
+
+    scores = model.evaluate(test_features, test_targets, verbose=True)
+
+    print(model.metrics_names)
+    print(scores)
+  
 
 def main(job_dir,**args):
-    logs_path = job_dir + '/logs/'
 
     ##Usar GPU
     with tf.device('/device:GPU:0'):
@@ -133,13 +174,16 @@ def main(job_dir,**args):
 
       features_train, features_test, targets_train, targets_test = train_test_split(features, targets, test_size = .3)
 
-      #run_nn(features_train, features_test, targets_train, targets_test, logs_path)
-      run_svm(features_train, features_test, targets_train, targets_test, logs_path)
+      run_nn(features_train, features_test, targets_train, targets_test, job_dir)
+      #run_svm(features_train, features_test, targets_train, targets_test, job_dir)
 
+      #test_best_nn(features_test, targets_test, job_dir)
+
+#Calcula o R-quadrado como score para o keras
 def r2_keras(y_true, y_pred):
     SS_res =  K.sum(K.square(y_true - y_pred)) 
     SS_tot = K.sum(K.square(y_true - K.mean(y_true))) 
-    return ( 1 - SS_res/(SS_tot + K.epsilon()) )
+    return (1 - SS_res/(SS_tot + K.epsilon()))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

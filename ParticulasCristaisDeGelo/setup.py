@@ -6,6 +6,7 @@ setup(name='trainer',
       install_requires=[
           'keras',
           'h5py',
-          'sklearn'
+          'sklearn',
+          'matplotlib'
       ],
 zip_safe=False)
